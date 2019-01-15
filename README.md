@@ -16,7 +16,7 @@ The contents of this project come directly from the book and thus would include 
 * Statistical Learning
 * Linear Regression
 * Classification
-* Resampling Methods
+* [Resampling Methods](https://github.com/aniruddha-panwar/ISLR/tree/master/Ch05%20-%20Resampling%20Methods)
 * Linear Model Selection and Regularization
 * Moving Beyond Linearity
 * Tree-Based Methods
