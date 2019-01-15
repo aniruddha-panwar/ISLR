@@ -1,0 +1,366 @@
+---
+title: "Applied05"
+author: "Ani Panwar"
+date: "January 14, 2019"
+output: 
+  html_document:
+    highlight: haddock
+    number_sections: yes
+    theme: cerulean
+    toc: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Estimating test error for a classification model
+### Data Desc.
+Data set : `default`  
+Model : `default ~ income + balance`
+```{r}
+library(ISLR)
+summary(Default)
+```
+
+### fit a model 
+Fit a logistic regression model to predict `default` from `income` and `balance`
+```{r}
+attach(Default)
+set.seed(1)
+glm.fit = glm(default ~ income + balance, data = Default, family = binomial)
+```
+### validation set approach
+Lets estimate the test error rate of the model  
+
+* Split the sample set into training and validation set
+```{r}
+set.seed(1)
+train = sample(dim(Default)[1], dim(Default)[1]/2)
+```
+  
+* Fit a multiple logistic regression model using only training set
+```{r}
+glm.fit = glm(default ~ income + balance, data = Default, family = binomial, subset = train)
+```
+  
+* Predict default status for each individual in validation set (if posterior probability of default for the individual is above 0.5 then the individual defaults)
+```{r}
+glm.pred = rep("No", dim(Default)[1]/2)
+glm.probs = predict(glm.fit, Default[-train, ], type = "response")
+glm.pred[glm.probs > 0.5] = "Yes"
+
+```
+* Compute the validation set error (fraction of the observations in validation set that are misclassified)
+```{r}
+
+mean(glm.pred != Default[-train, ]$default)
+
+```
+We seem to have a test error rate of 2.86% for the given split created in the validation set approach
+
+### validation set approach with variable training and validation set
+* repeat the validation set approach for the above data set using 3 different splits
+
+```{r}
+# defining a function with same steps as section above without the SEED to give 3 different sets and results
+
+vsa_func = function(){
+  # set.seed(1)
+  train = sample(dim(Default)[1], dim(Default)[1]/2)
+  
+  glm.fit = glm(default ~ income + balance, data = Default, family = binomial, subset = train)
+  
+  glm.pred = rep("No", dim(Default)[1]/2)
+  glm.probs = predict(glm.fit, Default[-train, ], type = "response")
+  glm.pred[glm.probs > 0.5] = "Yes"
+  
+  
+  mean(glm.pred != Default[-train, ]$default)
+}
+
+# result 1
+vsa_func()
+
+#result 2
+vsa_func()
+
+#result 3
+vsa_func()
+
+```
+We get different (variable) test error using different samples. These avg out to `r mean(c(0.0236,0.028,0.0268))`.
+
+### Validation set approach with an additional dummy variable
+Throwing in `student` into the predictors we build a new model.
+```{r}
+set.seed(1)
+train = sample(dim(Default)[1],dim(Default)[1]/2)
+
+glm.fit = glm(default~income+balance+student, data = Default, subset = train, family = binomial)
+
+glm.pred = rep("No",length(train))
+glm.probs = predict(glm.fit, Default[-train,], type = "response")
+glm.pred[glm.probs>0.5]="Yes"
+
+# Test Error
+mean(glm.pred!=Default[-train,]$default)
+```
+It doesn't appear that the dummy variable is making a big difference in the test error rate.
+
+## Booststrap estimate std. errors for regression coeff vs. std. formula
+### Data Desc.
+Data set : `default`  
+Model : `default ~ income + balance`
+```{r}
+library(ISLR)
+summary(Default)
+attach(Default)
+```
+### Standard error of coefficients using `summary()`
+* Use `summary()` and `glm()` to find std. errors of coefficients
+```{r}
+set.seed(1)
+glm.fit = glm(default~income+balance, data = Default, family = binomial)
+summary(glm.fit)
+```
+### Estimating standard error of coefficients using bootstrap
+* Define a `boot.fn()` which takes as input the `Default` data set, index of observations. It outputs coefficient estimates for the above coefficients.
+
+```{r}
+boot.fn = function(data,index) return(coef(glm(default~income+balance, data = data, subset = index, family = binomial)))
+
+```
+* Use `boot()` and `boot.fn()` to estimate std. errors of logistic regression coefficients
+```{r}
+library(boot)
+boot(Default,boot.fn, 50)
+
+```
+Looks the bootstrap std errors for the coefficients are pretty close to the ones found in the `summary()`.
+
+## LOOCV calculation without using `cv.glm()`
+### Data Desc.
+Data set : `Weekly`
+Model : `Direction ~ Lag1 + Lag2`
+```{r}
+library(ISLR)
+summary(Weekly)
+attach(Weekly)
+```
+
+
+### Fit a logistinc regression model to predict `Direction` using `Lag1 + Lag2`
+```{r}
+glm.fit = glm(Direction~Lag1+Lag2, data = Weekly, family = binomial)
+summary(glm.fit)
+```
+
+### Fit a logistic regression model that has the same framework but does not use the first observation
+```{r}
+glm.fit = glm(Direction~Lag1+Lag2, data = Weekly, family = binomial, subset = -1)
+summary(glm.fit)
+
+```
+### Use the above model to repdict direction of 1st observation
+```{r}
+glm.pred = "Down"
+
+glm.probs = predict(glm.fit,Weekly,type = "response")[1]
+
+# Prediction
+glm.pred[glm.probs>0.5]="Up"
+
+# 1st obs direction
+Weekly$Direction[1]
+```
+Prediction was incorrect with prediction being 'Up' but actual Direction being 'Down'.
+
+### `for()` to perform LOOCV 
+Follow the steps below to perform LOOCV without the `cv.glm()` function. LOOCV estimate for the test error is in the next section.
+Perform the following steps -  
+
+* Fit the logistic regression model using all but $i^{th}$ observation
+* Compute Posterior probability of the market moving up or down for $i^{th}$ observation
+* Use the posterior probability for $i^{th}$ observation to predict market going up or down
+* Create an error flag that houses value 1 for incorrect prediction and 0 for correct
+
+```{r}
+count = rep(0,dim(Weekly)[1])
+for(i in 1:dim(Weekly)[1]){
+  glm.fit = glm(Direction ~ Lag1 + Lag2, data = Weekly, family = binomial, subset = -i)
+  is_up = predict(glm.fit,Weekly[i,], type = "response")>0.5
+  is_true_up = Weekly[i,]$Direction == "Up"
+  count[i] = ifelse(is_up == is_true_up, 0,1)
+}
+sum(count)
+```
+This indicates that 490 observations of 1089 were incorrectly classified.
+
+### Average out the n numbers to find LOOCV estimate for test error
+
+```{r}
+mean(count)
+```
+Suggests a LOOCV estimate for test error to be 45%
+
+## Cross Validation on simulated data
+### Generate data
+
+```{r}
+set.seed(1)
+x = rnorm(100)
+y = x-2*x^2+rnorm(100)
+```
+In this data we have `n = 100` and `p = 2` and is of the form
+
+$$Y = X - 2X^2 + \epsilon$$
+
+### Scatter Plot of X vs. y
+```{r echo=FALSE}
+library(tidyverse)
+library(ggplot2)
+```
+```{r}
+data.frame( x = x , y = y) %>% 
+  ggplot(aes(x,y)) + geom_point(color = 'navy')
+
+```
+  
+This a quadratic plot and thus shows a curve. Negative sign on the quadratic term makes the plot an inverted U. Centered near 0 (actually at 0 + $\epsilon$).
+
+### Set a random seed and compute LOOCV errors arising from fitting models using least squares
+
+#### Model 1 - $$ Y = \beta_0 + \beta_1 X + \epsilon$$
+#### Model 2 - $$ Y = \beta_0 + \beta_1 X + \beta_2 X^2 + \epsilon$$
+#### Model 3 - $$ Y = \beta_0 + \beta_1 X + \beta_2 X^2 + \beta_3 X^3 + \epsilon$$
+#### Model 4 - $$ Y = \beta_0 + \beta_1 X + \beta_2 X^2 + \beta_3 X^3 + \beta_4 X^4 + \epsilon$$
+
+```{r}
+df = data.frame(X = x, Y = y)
+
+set.seed(1)
+# cv.err = rep(0,4)
+for(i in 1:4){
+  
+  glm.fit = glm( Y ~ poly(X,i), data = df)
+  cv.err = cv.glm(data = df, glmfit = glm.fit)
+  print(cv.err$delta[1])
+}
+
+
+```
+
+### Repeat above with a different seed
+* Comment on the results
+```{r}
+df = data.frame(X = x, Y = y)
+
+set.seed(10)
+# cv.err = rep(0,4)
+for(i in 1:4){
+  
+  glm.fit = glm( Y ~ poly(X,i), data = df)
+  cv.err = cv.glm(data = df, glmfit = glm.fit)
+  print(cv.err$delta[1])
+}
+
+
+```
+
+Looks like the LOOCV estimates are the same and rightly so since it estimates considering `n-1` obs each iteration.
+
+The lowest LOOCV error arises from the quadratic fit and this is natural as it is more close to the true form of Y (recollect setting Y with the formula).
+
+### Comment on Stat significance of coef estimates that results in fitting each of the four models 
+
+```{r}
+set.seed(1)
+# cv.err = rep(0,4)
+for(i in 1:4){
+  
+  glm.fit = glm( Y ~ poly(X,i), data = df)
+  print(summary(glm.fit)$coefficients[,4])
+  print(summary(glm.fit))
+  print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+}
+
+```
+This shows in the (higher order summary) that the quadratic and linear terms have high statistical significance. Goes hand in hand with the LOOCV test estimate results.
+
+## Bootstrap Estimate on `Boston` data
+### Provide estimate for population mean $\hat{\mu}$ based on the data set
+
+```{r message=FALSE}
+library(MASS)
+attach(Boston)
+dim(Boston)
+summary(Boston)
+
+mean.medv = mean(medv)
+print(mean.medv)
+```
+  Population mean from the data set is about 22.53  
+  
+### Provide estimate for std error of $\hat{\mu}$
+
+```{r}
+err.medv = sd(medv)/sqrt(length(medv))
+print(err.medv)
+```
+  Standard error is computed at 0.4089  
+
+### Provide estimate for std error for $\hat{\mu}$ using boostrap
+
+```{r}
+library(boot)
+boot.fn = function(data,index) return(mean(data[index]))
+
+btsrap = boot(medv,boot.fn,1000)
+btsrap
+```
+  
+The bootstrap est. of the std error is 0.4119. This is same up to 2 significant digits with 0.4089.
+
+### Provide 95% confidence interval for $\hat{\mu}$. Compare it to `t.test(Boston$medv)`
+```{r}
+# Confidence interval using bootstrap for population mean
+c(mean.medv-2*0.4119, mean.medv+2*0.4119)
+
+t.test(medv)
+
+```
+  
+It seems that the 95% confidence interval is tad narrower by 0.02 than the bootstrap confidence interval.
+
+### Provide an estimate for median medv $\hat{\mu}_{med}$
+  
+```{r}
+med.medv = median(medv)
+med.medv
+```
+
+### Find std. error for median using bootstrap
+There is no direct way to achieve this and thus we use bootstrap to estimate error involved with population median for medv $\hat{\mu}_{med}$
+
+```{r}
+boot.fn = function(data,index) return(median(data[index]))
+boot(medv,boot.fn,1000)
+```
+  The standard error for $\hat{\mu}_{med}$ comes out at 0.3801. This is a small value compared to the value of the median itself.
+  
+### Provide an estimate for 10th percentile of medv $\hat{\mu}_{0.1}$
+```{r}
+medv.10 = quantile(medv,0.1)
+medv.10
+```
+
+
+### Boostrap estimate of $\hat{\mu}_{0.1}$
+```{r}
+boot.fn = function(data,index) return(quantile(data[index],0.1))
+set.seed(1)
+boot(data = medv, statistic = boot.fn,1000)
+
+```
+$\hat{\mu}_{0.1}$ is 12.75 with 0.51 std. error.
