@@ -13,7 +13,7 @@ The main source material on this learning Journey comes from [An Introduction to
 
 The contents of this project come directly from the book and thus would include -
 
-* Statistical Learning
+* [Statistical Learning]((https://github.com/aniruddha-panwar/ISLR/tree/master/Ch02%20-%20Statiscal%20Learning)
 * Linear Regression
 * Classification
 * [Resampling Methods](https://github.com/aniruddha-panwar/ISLR/tree/master/Ch05%20-%20Resampling%20Methods)
