@@ -50,7 +50,7 @@ The following pre-requisites cover installations and packages ->
 
 ## SOURCES
 
-***Structured acknowledgements coming soon ***
+*Structured acknowledgements coming soon *
 
 1. [An Introduction to Statistical Learning with Applications in R] - Gareth James, Daniela Witten, Trevor Hastie, Robert Tibshirani ; 2013
 
