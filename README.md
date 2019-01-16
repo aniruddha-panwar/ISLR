@@ -39,6 +39,7 @@ The following pre-requisites cover installations and packages ->
 * MASS
 * boot
 * ggplot2
+* dplyr
 
 
 ## BUILT WITH
